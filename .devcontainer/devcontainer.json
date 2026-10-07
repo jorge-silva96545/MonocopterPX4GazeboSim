@@ -1,0 +1,20 @@
+{
+  "name": "px4-monospinner",
+  "build": { "dockerfile": "../Dockerfile", "context": "..", "target": "dev" },
+  "workspaceMount": "source=${localWorkspaceFolder},target=${localWorkspaceFolder},type=bind",
+  "workspaceFolder": "${localWorkspaceFolder}",
+  "runArgs": [
+    "--network=host",
+    "--ipc=host",
+    "--device=/dev/dri"
+  ],
+  "containerEnv": {
+    "DISPLAY": "${localEnv:DISPLAY}",
+    "QT_X11_NO_MITSHM": "1"
+  },
+  "mounts": [
+    "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind"
+  ],
+  "remoteUser": "dev",
+  "postCreateCommand": "bash .devcontainer/postCreate.sh ${containerWorkspaceFolder}"
+}

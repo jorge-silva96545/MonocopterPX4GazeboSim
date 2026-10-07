@@ -1,0 +1,13 @@
+# Keep the build context to source only. The final image stage fetches the pinned
+# dependencies itself and must not inherit host-side builds (PX4 bakes absolute paths in).
+.git/
+PX4-Autopilot/
+src/px4_msgs/
+src/px4_ros2_cpp/
+build/
+install/
+log/
+**/__pycache__/
+*.ulg
+.vscode/
+.claude/

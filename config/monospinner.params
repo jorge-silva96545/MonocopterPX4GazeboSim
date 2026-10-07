@@ -1,0 +1,53 @@
+# PX4 parameter overrides for the monospinner, layered on top of the x500
+# (PX4_SYS_AUTOSTART=4001) baseline. See CLAUDE.md for why we reuse that airframe instead
+# of adding one to PX4-Autopilot/.
+#
+# Format: one `param set <NAME> <VALUE>` per line (blank lines and lines starting with
+# `#` are ignored by scripts/run_sim.sh). No values are set yet -- this is scaffolding.
+#
+# TODO(physics): EKF2_IMU_POS_X/Y/Z must be set to the IMU's offset from the body origin
+# (see hub_offset in models/monospinner/model.sdf and the "Known traps" section of
+# CLAUDE.md -- a spinning body with EKF2_IMU_POS unset corrupts the velocity estimate via
+# uncompensated centripetal acceleration). Left unset until the IMU sensor pose in
+# model.sdf is finalized.
+#
+# TODO(physics): the land detector and several failsafes assume a non-rotating multirotor
+# and must be relaxed for a vehicle that spins continuously by design. Exact parameter
+# names (e.g. land-detector rotation thresholds) need to be confirmed against
+# PX4-Autopilot/src/modules/land_detector once that source is fetched -- not guessed here.
+
+# ---------------------------------------------------------------------------
+# Put ROS 2 /fmu/out/* timestamps on the SIMULATION clock.
+#
+# With UXRCE_DDS_SYNCT=1 (PX4's default, module.yaml:97) the uXRCE-DDS client adds the
+# measured client/agent offset to every outgoing message timestamp:
+#   src/modules/uxrce_dds_client/dds_topics.h.em:126
+#     int64_t time_offset_us = session->time_offset / 1000;
+# so /fmu/out/* arrives in ROS 2 stamped in the AGENT's OS wall-clock time, while Gazebo
+# topics are stamped in simulation time. Measured here: gz ground truth at t=96 s against
+# a PX4 estimate at t=1788873294 s, i.e. no usable overlap at all.
+#
+# Setting this to 0 makes the client publish raw hrt_absolute_time(), which under lockstep
+# is gz sim time (GZBridge::clockCallback -> px4_clock_settime, GZBridge.cpp:331-347;
+# drv_hrt.cpp:106-115). Ground truth and estimate then share one timeline and can be
+# overlaid and differenced directly.
+#
+# This matters more here than on a conventional airframe. Per CLAUDE.md the commanded
+# phase is beta_cmd = psi_desired - theta_spin - delta(omega), so a heading estimate that
+# LAGS rotates the control input directly. Estimator lag is a control quantity for this
+# vehicle, and it cannot be measured at all if the two series are not on one clock.
+#
+# Note: reboot_required, so it must be set at boot. scripts/run_sim.sh applies this file
+# through the PX4_PARAM_* env hook (rcS:129-134) precisely for that reason.
+#
+# Cost: ROS 2 consumers can no longer relate /fmu/out/* stamps to wall time. For this
+# workspace that is the right trade -- everything downstream is sim analysis.
+param set UXRCE_DDS_SYNCT 0
+
+# Magnetic declination: deliberately NOT overridden. EKF2_DECL_TYPE stays at its default (3,
+# use PX4's WMM). The sim's field is made to match the WMM by the yawed magnetometer <pose>
+# in models/monospinner/model.sdf -- see the comment there. Do not set EKF2_DECL_TYPE 0 to
+# use a manual EKF2_MAG_DECL: in v1.17 getMagDeclination() (src/modules/ekf2/EKF/
+# aid_sources/magnetometer/mag_control.cpp:602-623) then returns 0, not EKF2_MAG_DECL,
+# and with bit 1 set EKF2 overwrites EKF2_MAG_DECL with the WMM value anyway
+# (EKF2.cpp:2751-2760).

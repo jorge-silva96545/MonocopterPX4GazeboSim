@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <world name="monospinner_default">
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <!--
+      Non-rendering sensors (magnetometer/air_pressure/navsat) are driven by their own
+      dedicated systems in gz-sim8, not by gz::sim::systems::Sensors (which only services
+      camera/lidar/rendering-based sensors). Without these, PX4's gz_bridge subscribes to
+      the sensor topics but nothing ever publishes on them and EKF2 never gets data. Copied
+      from PX4-Autopilot/src/modules/simulation/gz_bridge/server.config, the plugin set PX4
+      itself loads for gz-standalone launches.
+
+      IMU is the exception: gz-sim-imu-system is commented out below, superseded by the
+      monospinner::ImuPhysical plugin loaded in models/monospinner/model.sdf, which
+      publishes straight to PX4's hardcoded IMU topic without needing a <sensor> entity.
+    -->
+    <!-- <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/> -->
+    <plugin filename="gz-sim-air-pressure-system" name="gz::sim::systems::AirPressure"/>
+    <plugin filename="gz-sim-navsat-system" name="gz::sim::systems::NavSat"/>
+    <plugin filename="gz-sim-magnetometer-system" name="gz::sim::systems::Magnetometer"/>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+        </visual>
+      </link>
+    </model>
+
+    <include>
+      <uri>model://monospinner</uri>
+      <name>monospinner</name>
+      <pose>0 0 0.2 0 0 0</pose>
+    </include>
+
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <world_frame_orientation>ENU</world_frame_orientation>
+      <latitude_deg>47.397971057728974</latitude_deg>
+      <longitude_deg> 8.546163739800146</longitude_deg>
+      <elevation>0</elevation>
+    </spherical_coordinates>
+
+
+  </world>
+</sdf>

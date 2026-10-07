@@ -1,0 +1,21 @@
+repositories:
+  PX4-Autopilot:
+    type: git
+    url: https://github.com/PX4/PX4-Autopilot.git
+    version: v1.17.0
+
+  src/px4_msgs:
+    type: git
+    url: https://github.com/PX4/px4_msgs.git
+    version: release/1.17
+
+  src/px4_ros2_cpp:
+    type: git
+    url: https://github.com/Auterion/px4-ros2-interface-lib.git
+    # Pinned to 1.6.1, not main: main requires the SetpointConfig mode-registration
+    # message (added to px4_msgs upstream 2026-06-16, first shipped in px4_ros2_cpp
+    # 2.2.0) and ConfigOverrides.disable_auto_set_home (required since px4_ros2_cpp
+    # 2.0.0), neither of which exist in PX4-Autopilot v1.17.0's own message set. 1.6.1
+    # (2025-08-04) is the newest tag that predates both requirements. See CLAUDE.md,
+    # "Pinned versions".
+    version: 1.6.1

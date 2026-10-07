@@ -1,0 +1,524 @@
+<?xml version="1.0" ?>
+<!--
+  Mono-spinner UAV — Gazebo Harmonic (gz-sim 8) model.
+
+  Parameters from Bernardes, Boyer & Viollet, "Modelling, control and simulation
+  of a single rotor UAV with swashplateless torque modulation", Aerospace Science
+  and Technology, 2023.  Table 1 unless noted.
+
+  FRAME CONVENTION (matches the paper's Figure 2):
+    base_link origin  = F_B, the MAIN BODY centre of mass.  All poses below are
+                        expressed relative to it, so every number here can be
+                        read straight off the paper.
+    battery  at  z = -h_S = -0.145 m   (F_S, below F_B)
+    rotor    at  z = +h_P = +0.083 m   (F_P, above F_B)
+
+  The composite centre of mass, which Gazebo computes itself, sits at
+  z = -Delta_m/m = -0.06839 m, i.e. 68.4 mm BELOW base_link's origin.
+  Nothing in this file needs to know that; the plugin works in base_link frame.
+
+  ONE CORRECTION TO THE PAPER: Table 1 prints Jpz = 0.0001061 kg m^2, which
+  violates the inertia triangle inequality (Jpz <= 2*Jpd) by a factor of ~10.
+  Corrected to Jpz = 2*Jpd = 1.04e-5 here (equality, Jpd unchanged at 5.2e-6) 
+  gz-math's MassMatrix3::ValidMoments() enforces this inequality with
+  essentially zero tolerance, so 1.061e-5 (the initial, still-too-high
+  correction) was rejected outright.  Do not "fix" this back.
+-->
+<sdf version="1.9">
+  <model name="monospinner">
+    <pose>0 0 0.2 0 0 0</pose>
+
+    <!-- ==================================================================
+         MAIN BODY  (B_b) — structure, electronics, stator, anti-torque fins
+         ================================================================== -->
+    <link name="base_link">
+      <inertial>
+        <pose>0 0 0 0 0 0</pose>
+        <mass>0.2100</mass> 
+        <inertia>
+          <ixx>0.0010026</ixx>
+          <iyy>0.0010026</iyy>
+          <izz>0.0001831</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial> <!-- check -->
+
+      <!-- Single collision primitive covering the whole airframe envelope.
+           Radius = fin tip radius.  Never use mesh collision on this vehicle. -->
+      <collision name="base_collision">
+        <pose>0 0 -0.040 0 0 0</pose>
+        <geometry>
+          <cylinder><radius>0.095</radius><length>0.260</length></cylinder>
+        </geometry>
+      </collision>
+
+      <!-- Cylindrical fuselage ALL VISUAL -->
+      <visual name="fuselage_visual" >
+        <pose>0 0 -0.050 0 0 0</pose>
+        <geometry>
+          <cylinder><radius>0.045</radius><length>0.150</length></cylinder>
+        </geometry>
+        <material>
+          <ambient>0.15 0.15 0.15 1</ambient>
+          <diffuse>0.20 0.20 0.20 1</diffuse>
+        </material>
+      </visual>
+
+      <!-- Motor mount platform ALL VISUAL -->
+      <visual name="platform_visual">
+        <pose>0 0 0.045 0 0 0</pose>
+        <geometry>
+          <cylinder><radius>0.045</radius><length>0.004</length></cylinder>
+        </geometry>
+        <material>
+          <ambient>0.10 0.10 0.10 1</ambient>
+          <diffuse>0.15 0.15 0.15 1</diffuse>
+        </material>
+      </visual>
+
+      <!-- Brushless motor stator ALL VISUAL -->
+      <visual name="motor_visual">
+        <pose>0 0 0.065 0 0 0</pose>
+        <geometry>
+          <cylinder><radius>0.014</radius><length>0.030</length></cylinder>
+        </geometry>
+        <material>
+          <ambient>0.45 0.45 0.48 1</ambient>
+          <diffuse>0.60 0.60 0.63 1</diffuse>
+        </material>
+      </visual>
+
+      <!-- ================= ANTI-TORQUE FINS ================= ALL VISUAL
+           8 fins, 136 mm x 50 mm (paper, Fig. 1 caption).
+           Assumed: 136 mm is the vertical height, 50 mm the radial chord.
+           Mounted from r = 0.045 to r = 0.095.
+           These are VISUAL ONLY.  Their aerodynamic effect enters the plugin
+           through K_z, which was measured on the 8-fin prototype.
+           ==================================================== -->
+      <visual name="fin_0">
+        <pose>0.070 0 -0.050 0 0 0</pose>
+        <geometry><box><size>0.050 0.002 0.136</size></box></geometry>
+        <material><ambient>0.85 0.82 0.35 1</ambient><diffuse>0.90 0.87 0.40 1</diffuse></material>
+      </visual>
+      <visual name="fin_1">
+        <pose>0.0495 0.0495 -0.050 0 0 0.7853982</pose>
+        <geometry><box><size>0.050 0.002 0.136</size></box></geometry>
+        <material><ambient>0.85 0.82 0.35 1</ambient><diffuse>0.90 0.87 0.40 1</diffuse></material>
+      </visual>
+      <visual name="fin_2">
+        <pose>0 0.070 -0.050 0 0 1.5707963</pose>
+        <geometry><box><size>0.050 0.002 0.136</size></box></geometry>
+        <material><ambient>0.85 0.82 0.35 1</ambient><diffuse>0.90 0.87 0.40 1</diffuse></material>
+      </visual>
+      <visual name="fin_3">
+        <pose>-0.0495 0.0495 -0.050 0 0 2.3561945</pose>
+        <geometry><box><size>0.050 0.002 0.136</size></box></geometry>
+        <material><ambient>0.85 0.82 0.35 1</ambient><diffuse>0.90 0.87 0.40 1</diffuse></material>
+      </visual>
+      <visual name="fin_4">
+        <pose>-0.070 0 -0.050 0 0 0</pose>
+        <geometry><box><size>0.050 0.002 0.136</size></box></geometry>
+        <material><ambient>0.85 0.82 0.35 1</ambient><diffuse>0.90 0.87 0.40 1</diffuse></material>
+      </visual>
+      <visual name="fin_5">
+        <pose>-0.0495 -0.0495 -0.050 0 0 0.7853982</pose>
+        <geometry><box><size>0.050 0.002 0.136</size></box></geometry>
+        <material><ambient>0.85 0.82 0.35 1</ambient><diffuse>0.90 0.87 0.40 1</diffuse></material>
+      </visual>
+      <visual name="fin_6">
+        <pose>0 -0.070 -0.050 0 0 1.5707963</pose>
+        <geometry><box><size>0.050 0.002 0.136</size></box></geometry>
+        <material><ambient>0.85 0.82 0.35 1</ambient><diffuse>0.90 0.87 0.40 1</diffuse></material>
+      </visual>
+      <visual name="fin_7">
+        <pose>0.0495 -0.0495 -0.050 0 0 2.3561945</pose>
+        <geometry><box><size>0.050 0.002 0.136</size></box></geometry>
+        <material><ambient>0.85 0.82 0.35 1</ambient><diffuse>0.90 0.87 0.40 1</diffuse></material>
+      </visual>
+
+      <!-- ================= SENSORS =================
+           All four co-located at F_B, per the paper's statement that keeping the
+           main CoM close to the electronics and inboard IMUs was a design goal.
+
+           >>> VERIFY THIS BLOCK against
+           >>> PX4-Autopilot/Tools/simulation/gz/models/x500/model.sdf
+           >>> before first run.  gz_bridge matches on sensor NAME; a mismatch
+           >>> gives you a vehicle that spawns and arms but has no estimator.
+
+           NOTE for config/monospinner.params: these sensors sit 68.4 mm ABOVE
+           the composite CoM.  In PX4's FRD body frame that is
+           EKF2_IMU_POS_Z = -0.0684.  On a body spinning at ~18 rad/s the
+           centripetal term is not negligible.
+           =========================================== -->
+      <!-- Superseded by the ImuPhysical plugin below (reads link kinematics from the ECM
+           directly and publishes straight to PX4's hardcoded IMU topic, see CLAUDE.md's
+           discussion + src/gz_imu_realism_plugin). Kept here, commented out, as a plain
+           (non-nested) sensor block: to actually switch the vehicle onto it, uncomment
+           this block AND the ImuPhysical <plugin> below must be commented out AND
+           gz-sim-imu-system must be uncommented in worlds/monospinner_default.sdf, since
+           this sensor produces no data on its own otherwise (that world-file comment is
+           what originally superseded it). Noise values below are also what ImuPhysical's
+           <gyro_noise_stddev>/<accel_noise_stddev> were ported from; keep them in sync if
+           you change one. Noise modeled after IIM42653, copied from PX4-Autopilot/Tools/
+           simulation/gz/models/x500_base/model.sdf (gyro: 0.05 deg/s -> rad/s; accel X/Y:
+           0.65 mg-rms -> m/s^2; accel Z: 0.70 mg-rms -> m/s^2). -->
+      <!--
+      <sensor name="imu_sensor" type="imu">
+        <pose>0 0 0 0 0 0</pose>
+        <always_on>1</always_on>
+        <update_rate>250</update_rate>
+        <imu>
+          <angular_velocity>
+            <x><noise type="gaussian"><mean>0.0</mean><stddev>0.0008726646</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0.0</mean><stddev>0.0008726646</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0.0</mean><stddev>0.0008726646</stddev></noise></z>
+          </angular_velocity>
+          <linear_acceleration>
+            <x><noise type="gaussian"><mean>0.0</mean><stddev>0.00637</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0.0</mean><stddev>0.00637</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0.0</mean><stddev>0.00686</stddev></noise></z>
+          </linear_acceleration>
+        </imu>
+      </sensor>
+      -->
+
+      <sensor name="air_pressure_sensor" type="air_pressure"> <!--air pressure is in the right place-->
+        <pose>0 0 0 0 0 0</pose>
+        <always_on>1</always_on>
+        <update_rate>50</update_rate>
+        <air_pressure>
+          <pressure>
+            <noise type="gaussian"><mean>0</mean><stddev>0.01</stddev></noise>
+          </pressure>
+        </air_pressure>
+      </sensor>
+
+      <!-- Superseded by the MagnetometerPhysical plugin below (src/gz_magnetometer_realism_plugin),
+           which computes the field from base_link's true attitude and publishes straight to
+           the topic GZBridge::subscribeMag() hardcodes. Kept here, commented out, as a plain
+           (non-nested) sensor block: to switch back, uncomment it AND comment out the
+           MagnetometerPhysical <plugin> below (two publishers on one topic would interleave
+           good and bad samples). gz-sim-magnetometer-system can stay in the world file; with
+           no magnetometer sensor in the model it does nothing.
+
+           Why it was replaced (notes from when this sensor was in use):
+           DELIBERATE 5.97 deg yaw (0.1042 rad), compensating a sim declination mismatch.
+             gz-sim 8's magnetometer system computes the field from <spherical_coordinates>
+             (a world <magnetic_field> is ignored tested) and, after GZBridge's axis swap
+             (PX4-Autopilot/src/modules/simulation/gz_bridge/GZBridge.cpp:400-404), PX4 sees
+             declination -2.56 deg at this world's lat/lon. PX4's own WMM
+             (src/lib/world_magnetic_model, used by EKF2 with the default EKF2_DECL_TYPE)
+             gives +3.406 deg there. This yaw makes the two agree ONLY WHILE THE VEHICLE IS
+             LEVEL: a rotation about the tilted body z is not a rotation about the world
+             vertical, so it adds a heading error of about 2 deg at 10 deg of tilt.
+             The magnetometer is wrong under tilt anyway, independently of this pose: gz-sim
+             8.15.0 hands the sensor NED field components as if they were ENU world axes
+             (src/systems/magnetometer/Magnetometer.cc lines 141 and 485 to 506), and
+             GZBridge's axis swap only undoes that for level attitudes and yaw. Measured in
+             run build/runs/2026-10-02T13-52-43: at 10 deg of tilt the field seen through the
+             true attitude is off by 15 to 32 deg in heading, EKF2 then rejects the
+             magnetometer and yaw drifts on the gyro alone. Location-dependent: recompute
+             if the world's lat/lon changes.
+           Noise below: copied from PX4-Autopilot/Tools/simulation/gz/models/x500_base/model.sdf
+           (its comment says "3 mgauss RMS, modeled after IIS2MDC"). -->
+      <!--
+      <sensor name="magnetometer_sensor" type="magnetometer">
+        <pose>0 0 0 0 0 0.1042</pose>
+        <always_on>1</always_on>
+        <update_rate>100</update_rate>
+        <magnetometer>
+          <x><noise type="gaussian"><stddev>0.0001</stddev></noise></x>
+          <y><noise type="gaussian"><stddev>0.0001</stddev></noise></y>
+          <z><noise type="gaussian"><stddev>0.0001</stddev></noise></z>
+        </magnetometer>
+      </sensor>
+      -->
+
+      <sensor name="navsat_sensor" type="navsat"> <!--gps is in the right place-->
+        <pose>0 0 0 0 0 0</pose>
+        <always_on>1</always_on>
+        <update_rate>30</update_rate>
+      </sensor>
+    </link>
+
+    <!-- ==================================================================
+         POWER SUPPLY  (B_s) — battery, h_S = 0.145 m below F_B
+         Kept as its own link so h_S stays an explicit, editable number.
+         Note Jsx != Jsy: the battery is NOT axisymmetric.
+         ================================================================== -->
+    <link name="battery">
+      <pose>0 0 -0.145 0 0 0</pose> <!-- This is correct -->
+      <inertial>
+        <pose>0 0 0 0 0 0</pose>
+        <mass>0.2007</mass>
+        <inertia>
+          <ixx>0.0001794</ixx>
+          <iyy>0.0000387</iyy>
+          <izz>0.0001928</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <visual name="battery_visual">
+        <geometry><box><size>0.062 0.040 0.030</size></box></geometry>
+        <material>
+          <ambient>0.55 0.40 0.10 1</ambient>
+          <diffuse>0.75 0.55 0.15 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <joint name="battery_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>battery</child>
+    </joint>
+
+    <!-- ==================================================================
+         ROTOR  (B_p) — h_P = 0.083 m above F_B
+
+         This link is a MASS CARRIER and a VISUAL ANCHOR ONLY.  It is welded by
+         a fixed joint and carries no rotor dynamics: all thrust, reaction
+         torque and gyroscopic coupling are applied by the plugin as wrenches on
+         base_link.  It exists because m_p and J_p^B are part of the paper's
+         composite inertia J (Eq. 6) and dropping them would change the model.
+
+         Its inertia is the azimuth-averaged tensor of Eq. 3-4,
+         diag(Jpd, Jpd, Jpz) — which is what makes welding it at alpha = 0
+         equivalent to the paper's dJ/dt = 0 assumption.
+
+         DO NOT convert this to a revolute joint.  A dynamically spinning link
+         would double-count the gyroscopic term the plugin already applies.
+         ================================================================== -->
+    <link name="rotor">
+      <pose>0 0 0.083 0 0 0</pose>
+      <inertial>
+        <pose>0 0 0 0 0 0</pose>
+        <mass>0.0067</mass>
+        <inertia>
+          <ixx>0.0000052</ixx>   <!-- Jpd -->
+          <iyy>0.0000052</iyy>   <!-- Jpd -->
+          <izz>0.0000104</izz>   <!-- Jpz = 2*Jpd, corrected; see header -->
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <visual name="hub_visual">
+        <geometry><cylinder><radius>0.008</radius><length>0.012</length></cylinder></geometry>
+        <material><ambient>0.30 0.30 0.32 1</ambient><diffuse>0.45 0.45 0.48 1</diffuse></material>
+      </visual>
+      <visual name="blade_visual">
+        <geometry><box><size>0.180 0.014 0.002</size></box></geometry>
+        <material><ambient>0.08 0.08 0.08 1</ambient><diffuse>0.12 0.12 0.12 1</diffuse></material>
+      </visual>
+    </link>
+
+    <joint name="rotor_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>rotor</child>
+    </joint>
+
+    <!-- ==================================================================
+         ACTUATOR PLUGIN
+
+         Applies, on base_link:
+           thrust      f_p * r          as a force at hub_offset  (Gazebo
+                                        derives the h_P e_z x f_p lever torque)
+           reaction    k * f_p * r      explicit torque, along the TILTED axis r
+           gyroscopic  -gamma_dot * Jpz * (omega x r)   explicit torque
+           fin drag    -sign(wz) * Kz * wz^2 * e_z      explicit torque
+
+         where r = [sa*cb, sa*sb, ca] is the thrust direction in base_link frame.
+         ================================================================== -->
+    <plugin filename="gz_monospinner_plugin" name="monospinner::ThrustVectorActuator">
+
+      <!-- Wrenches are applied to this link; all offsets are in its frame. -->
+      <link_name>base_link</link_name>
+      <rotor_visual_link>rotor</rotor_visual_link>
+
+      <!-- Geometry (paper Table 1) -->
+      <h_P>0.083</h_P>                    <!-- rotor above F_B, m -->
+      <h_S>0.145</h_S>                    <!-- battery below F_B, m -->
+
+      <!-- Rotor aerodynamic coefficients (paper Table 1, Eq. 24-25) -->
+      <k_f>5.2400e-6</k_f>                <!-- f_p = k_f * gamma_dot^2, kg m -->
+      <k_tau>1.0800e-8</k_tau>            <!-- tau_p = k_tau * gamma_dot^2, kg m^2 -->
+      <!--<k_ratio>2.0611e-3</k_ratio>-->        <!-- k = k_tau / k_f, m; tau_p = k * f_p -->
+
+      <!-- Body aerodynamic drag (paper Eq. 31-33), 8-fin prototype -->
+      <K_z>2.80908e-5</K_z>               <!-- tau = -sign(wz) * K_z * wz^2 -->
+
+      <!-- Rotor inertia for the gyroscopic term (paper Eq. 44) -->
+      <J_pz>1.04e-5</J_pz>                <!-- CORRECTED to 2*J_pd (triangle-inequality
+                                               equality); Table 1 prints 1.061e-4 -->
+      <J_pd>5.2e-6</J_pd>                 <!-- unused by the wrench; kept for reference -->
+
+      <!-- Masses (paper Table 1). Redundant with <inertial> above; the plugin
+           should CHECK them against the resolved link masses and warn on
+           mismatch rather than use them. -->
+      <m_b>0.2100</m_b>
+      <m_s>0.2007</m_s>
+      <m_p>0.0067</m_p>
+
+      <!-- Control set limits (paper Sec. 7.1, Eq. 80) -->
+      <alpha_max_deg>30.0</alpha_max_deg> <!-- tilt cone half-angle -->
+      <lambda_max>1.2</lambda_max>        <!-- max gamma_dot / Omega_hover -->
+      <Omega_hover>945.0</Omega_hover>    <!-- paper Table 2; but sqrt(m g / k_f)
+                                               with Table 1 values gives 883.8.
+                                               See notes. -->
+
+      <!-- Actuator dynamics. First-order placeholder; the tilt channel is
+           physically second-order and rotor-speed-scheduled. -->
+      <tau_thrust>0.05</tau_thrust>
+      <tau_tilt>0.03</tau_tilt>
+
+      <!-- Cosmetic rotor animation. visual_spin_rate is a DISPLAY rate, not
+           gamma_dot: rendering 945 rad/s at 60 fps only produces strobing.
+           visual_tilt_gain must default to 1.0 — exaggeration is for demos, and
+           anything you believe while it is >1 is suspect. -->
+      <visual_spin_rate>25.0</visual_spin_rate>
+      <visual_tilt_gain>1.0</visual_tilt_gain>
+
+    </plugin>
+
+    <!-- ==================================================================
+         IMU PLUGIN
+
+         Replaces gz-sim-imu-system + the commented-out <sensor type="imu"> block above.
+         Reads base_link's rigid-body kinematics from the ECM each physics step, converts
+         to specific force + body-frame angular velocity, applies noise, and publishes
+         directly to the topic PX4's GZBridge::subscribeImu() hardcodes, see
+         PX4-Autopilot/src/modules/simulation/gz_bridge/GZBridge.cpp. That topic string
+         does not depend on anything in this file and must not be "tidied" to look like a
+         real sensor-tree path.
+         ================================================================== -->
+    <plugin filename="gz_imu_realism_plugin" name="monospinner::ImuPhysical">
+      <link_name>base_link</link_name>
+      <topic>/world/monospinner_default/model/monospinner/link/base_link/sensor/imu_sensor/imu</topic>
+      <update_rate>250</update_rate>
+      <!-- Values model the IIM-42653 (TDK DS-000529), the IMU PX4's x500 baseline uses.
+
+           NOISE (white, per sample): datasheet total RMS noise at 100 Hz bandwidth 
+           gyro 0.05 deg/s-rms, accel 0.70 mg-rms (Z; X/Y are 0.65 mg, this plugin has one
+           stddev per channel type so the larger is used). Per-sample stddev, so these hold
+           only near update_rate = 250 Hz; change the rate and they no longer match the
+           datasheet's noise density (5 mdeg/s/sqrt(Hz), 70 ug/sqrt(Hz)). -->
+      <gyro_noise_stddev>0.0008726646</gyro_noise_stddev>
+      <accel_noise_stddev>0.00686</accel_noise_stddev>
+
+      <!-- BIAS (Gauss-Markov; ImuPhysical starts it at a random draw of this stddev, so it
+           is also the turn-on offset). stddev = datasheet initial tolerance, taken as
+           1-sigma, i.e. an UNCALIBRATED sensor PX4 SITL runs no gyro/accel calibration,
+           so EKF2 has to estimate all of it (within EKF2_GBIAS_INIT 0.1 rad/s and
+           EKF2_ABIAS_INIT 0.2 m/s^2 defaults).
+             gyro:  initial ZRO tolerance +-0.5 deg/s = 0.00873 rad/s (IIM-42653).
+             accel: initial zero-g tolerance +-20 mg = 0.196 m/s^2. NOT confirmed for the
+                    IIM-42653 this is the IIM-42652 sister part's figure.
+           correlation_time is an ENGINEERING ESTIMATE, not a datasheet number: drift is
+           mostly thermal (ZRO tempco +-0.04 deg/s/degC), and 1000 s gives ~0.17 deg/s of
+           drift over a 60 s flight, about a 4 degC change. -->
+      <gyro_bias_stddev>0.00873</gyro_bias_stddev>
+      <gyro_bias_correlation_time>1000</gyro_bias_correlation_time>
+      <accel_bias_stddev>0.196</accel_bias_stddev>
+      <accel_bias_correlation_time>1000</accel_bias_correlation_time>
+
+      <!-- SATURATION: the full-scale range PX4's driver configures, GYRO_FS_SEL_4000_DPS /
+           ACCEL_FS_SEL_32G (PX4-Autopilot/src/drivers/imu/invensense/iim42653/
+           IIM42653.hpp). 4000 deg/s = 69.81 rad/s; 32 g = 313.8 m/s^2. -->
+      <gyro_saturation>69.81</gyro_saturation>
+      <accel_saturation>313.8</accel_saturation>
+
+      <!-- Fixes the noise/bias RNG so runs are reproducible; ImuPhysical defaults to this
+           same value (0) if <seed> is omitted, but it's set explicitly here so it's visible
+           without reading the plugin source. Change it to get an independent noise draw. -->
+      <seed>0</seed>
+
+      <!--debugging-->
+      <publish_ground_truth>true</publish_ground_truth>
+      <ground_truth_topic>/model/monospinner/imu_gd_truth</ground_truth_topic>
+
+
+    </plugin>
+    <!-- ==================================================================
+         MAGNETOMETER PLUGIN
+
+         Replaces the commented-out <sensor type="magnetometer"> block above (gz-sim 8's
+         magnetometer is wrong under tilt, see the notes there). Rotates a constant world
+         field into base_link with the true attitude, adds Gauss-Markov bias + white noise,
+         and publishes on the topic GZBridge::subscribeMag() hardcodes
+         (PX4-Autopilot/src/modules/simulation/gz_bridge/GZBridge.cpp:230-231), pre-swapped
+         so GZBridge's axis swap yields the correct FRD body field. Mounted with no rotation
+         relative to base_link: no compensating yaw is needed any more.
+         ================================================================== -->
+    <plugin filename="gz_magnetometer_realism_plugin" name="monospinner::MagnetometerPhysical">
+      <link_name>base_link</link_name>
+      <topic>/world/monospinner_default/model/monospinner/link/base_link/sensor/magnetometer_sensor/magnetometer</topic>
+      <update_rate>100</update_rate>
+
+      <!-- WORLD FIELD, gz world ENU (East North Up), gauss. Must equal what EKF2 expects:
+           PX4's own WMM (PX4-Autopilot/src/lib/world_magnetic_model, WMM-2020 tables),
+           which EKF2 evaluates at the GPS position (aid_sources/magnetometer/
+           mag_control.cpp:629-658, default EKF2_DECL_TYPE). Computed by compiling PX4's
+           geo_mag_declination.cpp at this world's <spherical_coordinates>
+           (lat 47.397971, lon 8.546164):
+             declination +3.4058 deg, inclination 63.1575 deg, strength 0.48239 gauss
+             NED = (0.21743, 0.01294, 0.43041)  ->  ENU = (E, N, -D) below.
+           Location-dependent: recompute if the world's lat/lon changes. -->
+      <world_magnetic_field>0.01294 0.21743 -0.43041</world_magnetic_field>
+
+      <!-- NOISE (white, per sample, per axis): 3 mgauss RMS, the IIS2MDC/LIS2MDL datasheet
+           RMS noise figure (from memory of the ST datasheet, not re-checked here). The
+           x500 model's comment quotes the same 3 mgauss but sets 0.0001. -->
+      <magnetometer_noise_stddev>0.003</magnetometer_noise_stddev>
+
+      <!-- BIAS (Gauss-Markov). Models the RESIDUAL offset of a calibrated sensor (hard-iron
+           and offset calibration leave a few mgauss), not the raw +-60 mgauss zero-gauss
+           offset of an uncalibrated IIS2MDC: PX4 assumes a calibrated magnetometer and only
+           learns small biases in flight. 5 mgauss is about 1 % of the field (~1.3 deg of
+           heading on the 0.217 gauss horizontal component). The bias starts at zero.
+           correlation_time is an ENGINEERING ESTIMATE (thermal drift), matched to the
+           IMU plugin's 1000 s. -->
+      <magnetometer_bias_stddev>0.005</magnetometer_bias_stddev>
+      <magnetometer_bias_correlation_time>1000</magnetometer_bias_correlation_time>
+    </plugin>
+    <!-- ==================================================================
+         GROUND-TRUTH ODOMETRY PUBLISHER  (logging only, no physics)
+
+         Passive observer for scripts/record_vehicle_state.py. Publishes the model's
+         world pose and twist as gz.msgs.Odometry. Nothing subscribes to it inside the
+         simulation removing this plugin changes no dynamics.
+
+         WHY IT EXISTS: the alternative ground-truth source, the scene broadcaster's
+         /world/<w>/dynamic_pose/info, runs at ~60 Hz (GUI-oriented) against a 1 kHz
+         physics step. Differentiating a 60 Hz pose stream to recover the body rate of a
+         vehicle that spins continuously by design aliases badly.
+
+         WHAT IT IS NOT: this plugin does NOT read true velocity off the ECM. Verified
+         against the installed binary its only state accessor is gz::sim::worldPose(),
+         and it carries OdometryPublisherPrivate::CalculateAngularVelocity(Pose3 const &,
+         Pose3 const &, duration), i.e. it differences two poses over dt exactly as the
+         recorder used to. The gain here is entirely from <odom_publish_frequency>: at the
+         physics rate the differencing window is one 1 ms step instead of ~16 ms, which is
+         what removes the aliasing.
+
+         For ANGULAR RATE specifically, prefer ImuPhysical's <ground_truth_topic> above:
+         that plugin calls Link::WorldAngularVelocity() (src/gz_imu_realism_plugin/src/
+         ImuPhysical.cc) and publishes it there with no noise or bias. Do not use its
+         noisy <topic> as a reference it carries the configured gyro bias.
+         Use this plugin for position and linear velocity.
+
+         <dimensions> must be 2 or 3; the plugin errors out if it is missing or anything
+         else. Element names verified against the installed
+         libgz-sim8-odometry-publisher-system.so, not guessed.
+         ================================================================== -->
+    <plugin filename="gz-sim-odometry-publisher-system"
+            name="gz::sim::systems::OdometryPublisher">
+      <dimensions>3</dimensions>
+      <robot_base_frame>base_link</robot_base_frame>
+      <odom_frame>monospinner/odom</odom_frame>
+      <!-- Matches <physics><max_step_size>1ms in worlds/monospinner_default.sdf, so the
+           pose-differencing interval is a single physics step. -->
+      <odom_publish_frequency>1000</odom_publish_frequency>
+      <!-- Set explicitly rather than relying on the default "/model/" + name +
+           "/odometry", so the recorder and this file cannot drift apart. -->
+      <odom_topic>/model/monospinner/odometry</odom_topic>
+    </plugin>
+  </model>
+</sdf>
