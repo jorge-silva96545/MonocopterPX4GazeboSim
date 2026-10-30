@@ -234,11 +234,16 @@
       </sensor>
       -->
 
-      <sensor name="navsat_sensor" type="navsat"> <!--gps is in the right place-->
+      <!-- GNSS DISABLED (2026-10-28): the vehicle is used to test an IMU-only observer, so
+           PX4 gets no GPS. To restore, uncomment this block (gz-sim-navsat-system stays loaded
+           in worlds/monospinner_default.sdf; with no navsat sensor in the model it does
+           nothing).
+      <sensor name="navsat_sensor" type="navsat">
         <pose>0 0 0 0 0 0</pose>
         <always_on>1</always_on>
         <update_rate>30</update_rate>
       </sensor>
+      -->
     </link>
 
     <!-- ==================================================================
@@ -342,8 +347,14 @@
       <k_tau>1.0800e-8</k_tau>            <!-- tau_p = k_tau * gamma_dot^2, kg m^2 -->
       <!--<k_ratio>2.0611e-3</k_ratio>-->        <!-- k = k_tau / k_f, m; tau_p = k * f_p -->
 
-      <!-- Body aerodynamic drag (paper Eq. 31-33), 8-fin prototype -->
-      <K_z>2.80908e-5</K_z>               <!-- tau = -sign(wz) * K_z * wz^2 -->
+      <!-- Body aerodynamic drag (paper Eq. 31-33). The 8-fin prototype's measured value is
+           K_z = 2.80908e-5 (hover spin 17.3 rad/s). DELIBERATELY RAISED x8 to 2.24726e-4
+           (hover spin 6.13 rad/s): above ~7.04 rad/s PX4 EKF2's output predictor diverges
+           (body turns > 61.4 deg during the 152 ms fusion delay), see
+           docs/notes/ekf2_spin_and_accel_bias_findings.tex. x7 is the first stable value
+           but leaves only ~4 deg of margin. Cost: the body spins ~2.8x slower than the real
+           vehicle, so spin-dependent effects are weaker than on hardware. -->
+      <K_z>2.24726e-4</K_z>               <!-- tau = -sign(wz) * K_z * wz^2 -->
 
       <!-- Rotor inertia for the gyroscopic term (paper Eq. 44) -->
       <J_pz>1.04e-5</J_pz>                <!-- CORRECTED to 2*J_pd (triangle-inequality
@@ -403,8 +414,8 @@
       <gyro_noise_stddev>0.0008726646</gyro_noise_stddev>
       <accel_noise_stddev>0.00686</accel_noise_stddev>
 
-      <!-- BIAS (Gauss-Markov; ImuPhysical starts it at a random draw of this stddev, so it
-           is also the turn-on offset). stddev = datasheet initial tolerance, taken as
+      <!-- BIAS (Gauss-Markov; ImuPhysical starts it at ZERO, ImuPhysical.cc:112-118, and lets
+           it random-walk with density stddev*sqrt(2/correlation_time)). stddev = datasheet initial tolerance, taken as
            1-sigma, i.e. an UNCALIBRATED sensor PX4 SITL runs no gyro/accel calibration,
            so EKF2 has to estimate all of it (within EKF2_GBIAS_INIT 0.1 rad/s and
            EKF2_ABIAS_INIT 0.2 m/s^2 defaults).
@@ -413,16 +424,31 @@
                     IIM-42653 this is the IIM-42652 sister part's figure.
            correlation_time is an ENGINEERING ESTIMATE, not a datasheet number: drift is
            mostly thermal (ZRO tempco +-0.04 deg/s/degC), and 1000 s gives ~0.17 deg/s of
-           drift over a 60 s flight, about a 4 degC change. -->
+           drift over a 60 s flight, about a 4 degC change.
+           ACCEL correlation_time DELIBERATELY RAISED to 1e6 s (was 1000 s): at 1000 s the
+           bias random-walks at 8.8e-3 m/s^2/sqrt(s), ~33x faster than EKF2's default
+           EKF2_ACC_B_NOISE 0.003 assumes (0.003*sqrt(8 ms) = 2.7e-4), and EKF2 also stops
+           learning accel bias above EKF2_ABL_GYRLIM = 3 rad/s of spin; together they left a
+           ~0.2 m/s vertical-velocity offset. 1e6 s matches the default tuning. Realism for
+           the IIM-42653 NOT verified. See docs/notes/ekf2_spin_and_accel_bias_findings.tex. -->
       <gyro_bias_stddev>0.00873</gyro_bias_stddev>
       <gyro_bias_correlation_time>1000</gyro_bias_correlation_time>
       <accel_bias_stddev>0.196</accel_bias_stddev>
-      <accel_bias_correlation_time>1000</accel_bias_correlation_time>
+      <accel_bias_correlation_time>1000000</accel_bias_correlation_time>
 
-      <!-- SATURATION: the full-scale range PX4's driver configures, GYRO_FS_SEL_4000_DPS /
-           ACCEL_FS_SEL_32G (PX4-Autopilot/src/drivers/imu/invensense/iim42653/
-           IIM42653.hpp). 4000 deg/s = 69.81 rad/s; 32 g = 313.8 m/s^2. -->
-      <gyro_saturation>69.81</gyro_saturation>
+      <!-- SATURATION: per-axis clamp to +-limit, applied after bias and noise (ImuPhysical::
+           Saturate); a limit <= 0 disables it.
+             accel: the full-scale range PX4's driver configures, ACCEL_FS_SEL_32G
+                    (PX4-Autopilot/src/drivers/imu/invensense/iim42653/IIM42653.hpp);
+                    32 g = 313.8 m/s^2.
+             gyro:  DELIBERATELY LOWERED (2026-10-28) from 69.81 rad/s (4000 deg/s, the
+                    driver's GYRO_FS_SEL_4000_DPS) to 4.3633 rad/s = 250 deg/s, a common MEMS
+                    full-scale setting (not checked against the IIM-42653 datasheet). It is
+                    below the hover spin rate, so the z gyro saturates in normal flight: the
+                    test case for an IMU-only observer that must cope with a saturated gyro.
+                    Hover spin depends on <K_z> above (6.1 rad/s at the current value, 17.3
+                    rad/s at the paper's). PX4 EKF2 is not designed for a clipped gyro. -->
+      <gyro_saturation>4.3633</gyro_saturation>
       <accel_saturation>313.8</accel_saturation>
 
       <!-- Fixes the noise/bias RNG so runs are reproducible; ImuPhysical defaults to this
@@ -446,38 +472,46 @@
          (PX4-Autopilot/src/modules/simulation/gz_bridge/GZBridge.cpp:230-231), pre-swapped
          so GZBridge's axis swap yields the correct FRD body field. Mounted with no rotation
          relative to base_link: no compensating yaw is needed any more.
+
+         MAGNETOMETER DISABLED (2026-10-28): the vehicle is used to test an IMU-only
+         observer, so PX4 gets no magnetometer. The plugin block below is commented out
+         whole; XML comments cannot nest, so its own notes are kept as plain text inside it.
+         To restore: remove the comment markers around the block and put the notes back in
+         comments (or delete them).
          ================================================================== -->
+    <!--
     <plugin filename="gz_magnetometer_realism_plugin" name="monospinner::MagnetometerPhysical">
       <link_name>base_link</link_name>
       <topic>/world/monospinner_default/model/monospinner/link/base_link/sensor/magnetometer_sensor/magnetometer</topic>
       <update_rate>100</update_rate>
 
-      <!-- WORLD FIELD, gz world ENU (East North Up), gauss. Must equal what EKF2 expects:
+      WORLD FIELD, gz world ENU (East North Up), gauss. Must equal what EKF2 expects:
            PX4's own WMM (PX4-Autopilot/src/lib/world_magnetic_model, WMM-2020 tables),
            which EKF2 evaluates at the GPS position (aid_sources/magnetometer/
            mag_control.cpp:629-658, default EKF2_DECL_TYPE). Computed by compiling PX4's
            geo_mag_declination.cpp at this world's <spherical_coordinates>
            (lat 47.397971, lon 8.546164):
              declination +3.4058 deg, inclination 63.1575 deg, strength 0.48239 gauss
-             NED = (0.21743, 0.01294, 0.43041)  ->  ENU = (E, N, -D) below.
-           Location-dependent: recompute if the world's lat/lon changes. -->
+             NED = (0.21743, 0.01294, 0.43041)  to  ENU = (E, N, minus D) below.
+           Location-dependent: recompute if the world's lat/lon changes.
       <world_magnetic_field>0.01294 0.21743 -0.43041</world_magnetic_field>
 
-      <!-- NOISE (white, per sample, per axis): 3 mgauss RMS, the IIS2MDC/LIS2MDL datasheet
+      NOISE (white, per sample, per axis): 3 mgauss RMS, the IIS2MDC/LIS2MDL datasheet
            RMS noise figure (from memory of the ST datasheet, not re-checked here). The
-           x500 model's comment quotes the same 3 mgauss but sets 0.0001. -->
+           x500 model's comment quotes the same 3 mgauss but sets 0.0001.
       <magnetometer_noise_stddev>0.003</magnetometer_noise_stddev>
 
-      <!-- BIAS (Gauss-Markov). Models the RESIDUAL offset of a calibrated sensor (hard-iron
+      BIAS (Gauss-Markov). Models the RESIDUAL offset of a calibrated sensor (hard-iron
            and offset calibration leave a few mgauss), not the raw +-60 mgauss zero-gauss
            offset of an uncalibrated IIS2MDC: PX4 assumes a calibrated magnetometer and only
            learns small biases in flight. 5 mgauss is about 1 % of the field (~1.3 deg of
            heading on the 0.217 gauss horizontal component). The bias starts at zero.
            correlation_time is an ENGINEERING ESTIMATE (thermal drift), matched to the
-           IMU plugin's 1000 s. -->
+           IMU plugin's 1000 s.
       <magnetometer_bias_stddev>0.005</magnetometer_bias_stddev>
       <magnetometer_bias_correlation_time>1000</magnetometer_bias_correlation_time>
     </plugin>
+    -->
     <!-- ==================================================================
          GROUND-TRUTH ODOMETRY PUBLISHER  (logging only, no physics)
 

@@ -1,5 +1,6 @@
 #include "monospinner/ThrustVectorActuator.hh"
 
+#include <algorithm>
 #include <chrono>
 
 #include <gz/common/Console.hh>
@@ -23,6 +24,7 @@ void ThrustVectorActuator::Configure(
     return;
   }
 
+  // set all basic elements of the plugin
   if (_sdf->HasElement("link_name"))
     this->linkName = _sdf->Get<std::string>("link_name");
   if (_sdf->HasElement("rotor_visual_link"))
@@ -103,6 +105,8 @@ void ThrustVectorActuator::Configure(
   // subscriber there sees an advertised topic with no data. Verified live: capturing
   // "/monospinner/command/motor_speed" returns real (idle) ESC velocity messages;
   // "/model/monospinner/command/motor_speed" times out with none.
+  // this node will subscribe to the topic "/<model_name>/command/motor_speed" 
+  // and call the function ::OnActuatorMsg everytime it receives a message from it
   std::string topic = "/" + modelName + "/command/motor_speed";
   this->node.Subscribe(
       topic, &ThrustVectorActuator::OnActuatorsMsg, this);
@@ -153,7 +157,7 @@ void ThrustVectorActuator::PreUpdate(
     haveCommandCopy = this->haveCommand;
   }
 
-  if (!haveCommandCopy)
+  if (!haveCommandCopy) // if no command has ever been set, return? why would we return, is it not better to assume the command is zero? I suppose it turns out to be the same in the end
     return;
 
   // Guard against the first messages off the wire, which can arrive with fewer than
@@ -162,7 +166,7 @@ void ThrustVectorActuator::PreUpdate(
   if (command.position_size() < 2 || command.velocity_size() < 1)
     return;
 
-  std::cout << "running here\n";
+  // std::cout << "running here\n";
 
   // TODO(physics): decode command.normalized() into (throttle, tilt_x, tilt_y) per the
   // actuator channel mapping in CLAUDE.md, clamp ||(tilt_x, tilt_y)|| <= 1, run through
@@ -185,22 +189,29 @@ void ThrustVectorActuator::PreUpdate(
 
   // Apply physics
   // Total force applied at the propeller 
-  auto bodyPose = this->link.WorldPose(_ecm); 
-  auto bodyOmega = this->link.WorldAngularVelocity(_ecm);
+  auto bodyPose = this->link.WorldPose(_ecm); // gather bodyPose
+  auto bodyOmega = this->link.WorldAngularVelocity(_ecm); // gather bodyOmega
   if (!bodyPose || !bodyOmega) return;  
   auto rotationWorldToBody = bodyPose->Rot(); // get current world boddy orientation (gz::math::Quaterniond)
-  gz::math::Quaterniond rotationBodyToProp(0., this->actuatorTiltX, this->actuatorTiltY); // get current body prop orientation
-  auto rotationWorldToProp = rotationWorldToBody * rotationBodyToProp; 
-  gz::math::Vector3d thrustWorld = rotationWorldToProp * gz::math::Vector3d(0, 0, actuatorThrottle); 
+  gz::math::Quaterniond rotationBodyToThrust(0., this->actuatorTiltX, this->actuatorTiltY); // get current body thrust orientation
+  auto rotationWorldToThrust = rotationWorldToBody * rotationBodyToThrust;
+  gz::math::Vector3d thrustWorld = rotationWorldToThrust * gz::math::Vector3d(0, 0, actuatorThrottle); 
   this->rotorLink.AddWorldForce(_ecm, thrustWorld); // apply force at the rotor link with the appropriate magnitude
+  
   // Air drag reaction torque applied at the propeller (notice a pure moment can be translated freely)
-  this->link.AddWorldWrench(_ecm, gz::math::Vector3d(0., 0., 0.), (this->kTau / this->kF) * thrustWorld); 
-  // Gyroscopic torque 
-  auto propAngSpeedBodyFrame = std::sqrt(this->actuatorThrottle/this->kF); // recover angular speed of propellers 
-  auto gyroscopicTorque = - propAngSpeedBodyFrame * this->jPz * (bodyOmega->Cross(rotationWorldToProp * gz::math::Vector3d(0, 0, 1)));
+  // Acts about the tilted thrust direction: k_tau*Omega^2 = (k_tau/k_f)*T
+  this->link.AddWorldWrench(_ecm, gz::math::Vector3d(0., 0., 0.), (this->kTau / this->kF) * this->actuatorThrottle * (rotationWorldToThrust * gz::math::Vector3d(0., 0., 1.)));
+
+  // Gyroscopic torque AddWorldWrench
+  auto propAngSpeedBodyFrame = std::sqrt(std::max(0.0, this->actuatorThrottle/this->kF)); // recover angular speed of propellers
+  // Rotor spin axis is the tilted thrust direction
+  auto gyroscopicTorque = propAngSpeedBodyFrame * this->jPz * (bodyOmega->Cross(rotationWorldToThrust * gz::math::Vector3d(0, 0, 1)));
   this->link.AddWorldWrench(_ecm, gz::math::Vector3d(0., 0., 0.), gyroscopicTorque);
-  // Fin air drag torque 
-  this->link.AddWorldWrench(_ecm, gz::math::Vector3d(0., 0., 0.), - this->kZ * (rotationWorldToBody * gz::math::Vector3d(0., 0., 1.)) * std::pow(bodyOmega->Z(),2) * gz::math::sgn(bodyOmega->Z())); 
+
+  // Fin air drag torque
+  // Spin rate about the body's own axis: bodyOmega is in world axes, so rotate it into body axes first
+  const double spinRate = rotationWorldToBody.RotateVectorReverse(*bodyOmega).Z();
+  this->link.AddWorldWrench(_ecm, gz::math::Vector3d(0., 0., 0.), - this->kZ * (rotationWorldToBody * gz::math::Vector3d(0., 0., 1.)) * spinRate * std::abs(spinRate));
 
 
 }

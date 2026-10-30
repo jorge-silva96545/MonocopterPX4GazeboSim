@@ -13,8 +13,8 @@
 namespace monospinner
 {
 
-/// Applies the mono-spinner's thrust vector (see CLAUDE.md) as a wrench on a single link.
-/// No rotor link, no propeller joint -- the rotor is entirely a modelled force.
+/// Applies the mono-spinner's thrust vector as a wrench on a single link.
+/// No rotor link, no propeller joint -- therotor is entirely a modelled force.
 class ThrustVectorActuator
   : public gz::sim::System,
     public gz::sim::ISystemConfigure,
