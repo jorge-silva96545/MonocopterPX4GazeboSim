@@ -14,8 +14,14 @@
 FROM osrf/ros:jazzy-desktop AS dev
 
 ARG USERNAME=dev
-RUN apt-get update && apt-get install -y sudo git wget \
- && useradd -m -s /bin/bash $USERNAME \
+# Ubuntu 24.04 base images ship an "ubuntu" user at UID/GID 1000. Remove it so dev gets
+# 1000: the Dev Containers tooling (updateRemoteUserUID) remaps the remote user to the host
+# user's UID/GID at container start, and silently skips that when the target UID is already
+# taken -- which, for a host user at 1000, it would be.
+ARG USER_UID=1000
+RUN if id -u ubuntu >/dev/null 2>&1; then userdel -r ubuntu; fi \
+ && apt-get update && apt-get install -y sudo git wget \
+ && useradd -m -s /bin/bash --uid $USER_UID $USERNAME \
  && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME
 
 USER $USERNAME
@@ -64,7 +70,7 @@ COPY --chown=dev:dev . .
 RUN scripts/setup_workspace.sh
 RUN scripts/build_all.sh
 
-# Workspace overlay (px4_msgs, monospinner_control) on top of the base ROS 2 install.
+# Workspace overlay (px4_msgs, gz_monospinner_control) on top of the base ROS 2 install.
 RUN echo "source $MONOSPINNER_WS/install/setup.bash" >> "$HOME/.bashrc"
 
 CMD ["bash"]

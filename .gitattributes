@@ -1,0 +1,5 @@
+# Everything here runs inside a Linux container. Keep LF line endings even on Windows
+# clones (core.autocrlf=true), or every script fails with "/usr/bin/env: 'bash\r'".
+* text=auto eol=lf
+*.pdf binary
+*.png binary

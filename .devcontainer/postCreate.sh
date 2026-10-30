@@ -3,9 +3,11 @@
 # the image at build time because they depend on the host this container happens to run on:
 #
 # 1. Workspace ownership. The repo is bind-mounted from the host; the host directory's
-#    owning UID/GID is whatever the host user's are, which will not generally match the
-#    "dev" user created in the Dockerfile. Reconcile it here instead of guessing a UID at
-#    build time.
+#    owning UID/GID is whatever the host user's are. On Linux hosts the Dev Containers
+#    tooling normally remaps "dev" to that UID/GID (updateRemoteUserUID), so this is a
+#    no-op. Only when that didn't happen (host user is root, or a non-Dev-Containers
+#    launch) is the workspace chowned -- which changes ownership on the HOST too, so it is
+#    skipped whenever the owner already matches.
 #
 # 2. GPU render access. devcontainer.json passes --device=/dev/dri so Gazebo's Sensors
 #    system can do headless (or accelerated) rendering. The device nodes are owned by
@@ -17,8 +19,11 @@ set -euo pipefail
 
 WORKSPACE_DIR="${1:-$PWD}"
 
-echo "==> postCreate: chown $WORKSPACE_DIR to $(id -un):$(id -gn)"
-sudo chown -R "$(id -u):$(id -g)" "$WORKSPACE_DIR"
+if [[ "$(stat -c '%u' "$WORKSPACE_DIR")" != "$(id -u)" ]]; then
+  echo "==> postCreate: $WORKSPACE_DIR is owned by UID $(stat -c '%u' "$WORKSPACE_DIR"), not" \
+    "$(id -un) ($(id -u)); chowning it (this also changes ownership on the host)"
+  sudo chown -R "$(id -u):$(id -g)" "$WORKSPACE_DIR"
+fi
 
 for dev_node in /dev/dri/card0 /dev/dri/card1 /dev/dri/renderD128; do
   [[ -e "$dev_node" ]] || continue

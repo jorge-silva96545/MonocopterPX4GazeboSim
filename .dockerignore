@@ -11,3 +11,7 @@ log/
 *.ulg
 .vscode/
 .claude/
+# Local-only material, not needed in the image
+docs/
+analysis/
+/*.pdf
