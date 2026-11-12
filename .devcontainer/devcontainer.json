@@ -17,5 +17,5 @@
   ],
   "remoteUser": "dev",
   "updateRemoteUserUID": true,
-  "postCreateCommand": "bash .devcontainer/postCreate.sh ${containerWorkspaceFolder}"
+  "postCreateCommand": "bash .devcontainer/postCreate.sh \"${containerWorkspaceFolder}\""
 }
